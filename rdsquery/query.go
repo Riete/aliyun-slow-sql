@@ -32,10 +32,7 @@ func QuerySlowSQL(client *rds.Client, instanceId string) ([]rds.SQLSlowRecord, e
 		return nil, err
 	}
 	records := response.Items.SQLSlowRecord
-	if len(records) <= 20 {
-		return records, nil
-	}
-	return records[0:20], nil
+	return records, nil
 }
 
 func GetNameById(client *rds.Client, instanceId string) (string, error) {
