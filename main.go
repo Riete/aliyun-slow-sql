@@ -36,6 +36,10 @@ func main() {
 		log.Fatalln("robot.url is required")
 	}
 
+	if *instanceIds == "" {
+		log.Fatalln("instance.ids is required")
+	}
+
 	ids := strings.Split(*instanceIds, ",")
 	client := rdsquery.NewClient(*regionId, *accessKeyId, *accessKeySecret)
 
