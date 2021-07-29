@@ -15,5 +15,6 @@ docker run \
   --region.id=<region id> \
   --robot.url=https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxxx \
   --secret=SECxxxxxxxxxx \
-  --instance.ids=rds-id1,rds-id2,rds-id3
+  --instance.ids=rds-id1,rds-id2,rds-id3 \
+  --exclude.db=db1,db2
 ```
