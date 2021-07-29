@@ -13,25 +13,27 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
 )
 
-func newMessage(title string, record rds.SQLSlowRecord, ch chan<- string) {
+func newMessage(title string, record rds.SQLSlowRecord, exclude map[string]bool, ch chan<- string) {
 	executetimeStr := record.ExecutionStartTime
 	executetime, _ := time.Parse("2006-01-02T15:04:05Z", executetimeStr)
-	message := fmt.Sprintf(
-		"> 执行时间：%s\n\n> 客户端IP：%s\n\n> 数据库名：%s\n\n> 执行时长：%ds\n\n"+
-			"> 锁定时长：%ds\n\n> 解析行数：%d\n\n> 返回行数：%d\n\n> SQL语句：%s\n\n",
-		executetime.UTC().Add(8*time.Hour).Format("2006-01-02 15:04:05"),
-		record.HostAddress,
-		record.DBName,
-		record.QueryTimes,
-		record.LockTimes,
-		record.ParseRowCounts,
-		record.ReturnRowCounts,
-		record.SQLText,
-	)
-	ch <- fmt.Sprintf("%s=====%s", title, message)
+	if !exclude[record.DBName] {
+		message := fmt.Sprintf(
+			"> 执行时间：%s\n\n> 客户端IP：%s\n\n> 数据库名：%s\n\n> 执行时长：%ds\n\n"+
+				"> 锁定时长：%ds\n\n> 解析行数：%d\n\n> 返回行数：%d\n\n> SQL语句：%s\n\n",
+			executetime.UTC().Add(8*time.Hour).Format("2006-01-02 15:04:05"),
+			record.HostAddress,
+			record.DBName,
+			record.QueryTimes,
+			record.LockTimes,
+			record.ParseRowCounts,
+			record.ReturnRowCounts,
+			record.SQLText,
+		)
+		ch <- fmt.Sprintf("%s=====%s", title, message)
+	}
 }
 
-func NewdMessage(id string, client *rds.Client, ch chan<- string) error {
+func NewdMessage(id string, client *rds.Client, exclude map[string]bool, ch chan<- string) error {
 	name, err := rdsquery.GetNameById(client, id)
 	if err != nil {
 		return err
@@ -43,7 +45,7 @@ func NewdMessage(id string, client *rds.Client, ch chan<- string) error {
 		return err
 	}
 	for _, record := range records {
-		newMessage(title, record, ch)
+		newMessage(title, record, exclude, ch)
 	}
 	return nil
 }

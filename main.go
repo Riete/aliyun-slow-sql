@@ -18,6 +18,7 @@ func main() {
 	secret := flag.String("secret", "", "dingtalk callback url secret")
 	url := flag.String("robot.url", "", "dingtalk callback url")
 	instanceIds := flag.String("instance.ids", "", "rdsquery id, separated by ','")
+	excludeDb := flag.String("exclude.db", "", "database not send alert, separated by ','")
 	flag.Parse()
 
 	if *accessKeyId == "" {
@@ -42,6 +43,10 @@ func main() {
 
 	ids := strings.Split(*instanceIds, ",")
 	client := rdsquery.NewClient(*regionId, *accessKeyId, *accessKeySecret)
+	exclude := make(map[string]bool)
+	for _, v := range strings.Split(*excludeDb, ",") {
+		exclude[v] = true
+	}
 
 	message := make(chan string, 20)
 	go send.DoSend(*url, *secret, message)
@@ -49,7 +54,7 @@ func main() {
 	for {
 		for _, id := range ids {
 			go func(instanceId string) {
-				err := send.NewdMessage(instanceId, client, message)
+				err := send.NewdMessage(instanceId, client, exclude, message)
 				if err != nil {
 					log.Println(err)
 				}
