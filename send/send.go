@@ -14,13 +14,13 @@ import (
 )
 
 func newMessage(title string, record rds.SQLSlowRecord, exclude map[string]bool, ch chan<- string) {
-	executetimeStr := record.ExecutionStartTime
-	executetime, _ := time.Parse("2006-01-02T15:04:05Z", executetimeStr)
+	executeTimeStr := record.ExecutionStartTime
+	executeTime, _ := time.Parse("2006-01-02T15:04:05Z", executeTimeStr)
 	if !exclude[record.DBName] {
 		message := fmt.Sprintf(
 			"> 执行时间：%s\n\n> 客户端IP：%s\n\n> 数据库名：%s\n\n> 执行时长：%ds\n\n"+
 				"> 锁定时长：%ds\n\n> 解析行数：%d\n\n> 返回行数：%d\n\n> SQL语句：%s\n\n",
-			executetime.UTC().Add(8*time.Hour).Format("2006-01-02 15:04:05"),
+			executeTime.UTC().Add(8*time.Hour).Format("2006-01-02 15:04:05"),
 			record.HostAddress,
 			record.DBName,
 			record.QueryTimes,
@@ -33,14 +33,14 @@ func newMessage(title string, record rds.SQLSlowRecord, exclude map[string]bool,
 	}
 }
 
-func NewdMessage(id string, client *rds.Client, exclude map[string]bool, ch chan<- string) error {
-	name, err := rdsquery.GetNameById(client, id)
+func NewMessage(instanceId string, client *rds.Client, exclude map[string]bool, ch chan<- string) error {
+	name, err := rdsquery.GetNameById(client, instanceId)
 	if err != nil {
 		return err
 	}
 	title := fmt.Sprintf("RDS数据库[%s]新增慢SQL信息", name)
 
-	records, err := rdsquery.QuerySlowSQL(client, id)
+	records, err := rdsquery.QuerySlowSQL(client, instanceId)
 	if err != nil {
 		return err
 	}

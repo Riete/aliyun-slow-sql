@@ -54,7 +54,7 @@ func main() {
 	for {
 		for _, id := range ids {
 			go func(instanceId string) {
-				err := send.NewdMessage(instanceId, client, exclude, message)
+				err := send.NewMessage(instanceId, client, exclude, message)
 				if err != nil {
 					log.Println(err)
 				}
