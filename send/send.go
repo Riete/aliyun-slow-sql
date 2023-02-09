@@ -6,14 +6,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/riete/go-tools/notify"
-
-	"github.com/riete/aliyun-slow-sql/rdsquery"
-
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
+	"github.com/riete/dingtalk"
 )
 
-func newMessage(title string, record rds.SQLSlowRecord, exclude map[string]bool, ch chan<- string) {
+type Record struct {
+	HostAddress        string
+	DBName             string
+	SQLText            string
+	QueryTimes         int64
+	LockTimes          int64
+	ParseRowCounts     int64
+	ReturnRowCounts    int64
+	ExecutionStartTime string
+}
+
+type Records []Record
+
+func (r Records) newMessage(title string, record Record, exclude map[string]bool, ch chan<- string) {
 	executeTimeStr := record.ExecutionStartTime
 	executeTime, _ := time.Parse("2006-01-02T15:04:05Z", executeTimeStr)
 	if !exclude[record.DBName] {
@@ -33,40 +42,19 @@ func newMessage(title string, record rds.SQLSlowRecord, exclude map[string]bool,
 	}
 }
 
-func NewMessage(instanceId string, client *rds.Client, exclude map[string]bool, ch chan<- string) error {
-	name, err := rdsquery.GetNameById(client, instanceId)
-	if err != nil {
-		return err
+func (r Records) NewMessage(instanceName string, dbType string, exclude map[string]bool, ch chan<- string) {
+	title := fmt.Sprintf("%s数据库[%s]新增慢SQL信息", dbType, instanceName)
+	for _, record := range r {
+		r.newMessage(title, record, exclude, ch)
 	}
-	title := fmt.Sprintf("RDS数据库[%s]新增慢SQL信息", name)
-
-	records, err := rdsquery.QuerySlowSQL(client, instanceId)
-	if err != nil {
-		return err
-	}
-	for _, record := range records {
-		newMessage(title, record, exclude, ch)
-	}
-	return nil
 }
 
-func DoSend(url, secret string, ch <-chan string) {
-	var err error
-	var result string
-
+func DoSend(d dingtalk.DingTalk, ch <-chan string) {
 	for m := range ch {
 		title := strings.Split(m, "=====")[0]
 		message := strings.Split(m, "=====")[1]
 
-		if secret != "" {
-			result, err = notify.SendDingTalkNew(title, message, url, secret, true, nil)
-		} else {
-			result, err = notify.SendDingTalk(title, message, url, true, nil)
-		}
-
-		if err != nil {
-			log.Println(err)
-		}
+		result := d.SendMarkdown(title, message, false)
 		log.Println(result)
 		time.Sleep(3 * time.Second)
 	}

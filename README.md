@@ -1,20 +1,40 @@
-### docker build
-``` docker build . -t <image>:<tag> ```
-
-### or pull 
-``` docker pull riet/aliyun-slow-sql ```
-
-### run
+### edit config.json or create new
+``` 
+{
+    "rds": [
+        {
+            "AccessKeyId":"xxx",
+            "AccessKeySecret": "xxx",
+            "RegionId": "xxx",
+            "InstanceIds": [
+                "xxx",
+                "yyy"
+            ],
+            "Excluded": [
+                "xxx",
+                "yyy"
+            ]
+        }
+    ],
+    "polardb": [
+        {
+            "AccessKeyId":"xxx",
+            "AccessKeySecret": "xxx",
+            "RegionId": "xxx",
+            "InstanceIds": [
+                "xxx",
+                "yyy"
+            ],
+            "Excluded": [
+                "xxx",
+                "yyy"
+            ]
+        }
+    ]
+}
 ```
-docker run \ 
-  -d \ 
-  --name aliyun-slow-sql \
-  riet/aliyun-slow-sql \
-  --access.key.id=<aliyun ak> \
-  --access.key.secret=<aliyun ak sk> \
-  --region.id=<region id> \
-  --robot.url=https://oapi.dingtalk.com/robot/send?access_token=xxxxxxxxx \
-  --secret=SECxxxxxxxxxx \
-  --instance.ids=rds-id1,rds-id2,rds-id3 \
-  --exclude.db=db1,db2
+
+### run 
+```
+./aliyun-slow-sql -config /path/to/file
 ```

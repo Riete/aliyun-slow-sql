@@ -1,65 +1,106 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"flag"
+	"fmt"
 	"log"
-	"strings"
+	"os"
 	"time"
 
+	"github.com/riete/aliyun-slow-sql/query"
 	"github.com/riete/aliyun-slow-sql/send"
-
-	"github.com/riete/aliyun-slow-sql/rdsquery"
+	"github.com/riete/dingtalk"
 )
 
-func main() {
-	accessKeyId := flag.String("access.key.id", "", "aliyun access key id")
-	accessKeySecret := flag.String("access.key.secret", "", "aliyun access key secret")
-	regionId := flag.String("region.id", "", "aliyun region id")
-	secret := flag.String("secret", "", "dingtalk callback url secret")
-	url := flag.String("robot.url", "", "dingtalk callback url")
-	instanceIds := flag.String("instance.ids", "", "rdsquery id, separated by ','")
-	excludeDb := flag.String("exclude.db", "", "database not send alert, separated by ','")
+type Instance struct {
+	InstanceId   string       `json:"instance_id"`
+	ExcludedDB   []string     `json:"excluded_db"`
+	InstanceType query.DBType `json:"instance_type"`
+}
+
+func (i Instance) Exclude() map[string]bool {
+	ex := make(map[string]bool)
+	for _, exclude := range i.ExcludedDB {
+		ex[exclude] = true
+	}
+	return ex
+}
+
+type Task struct {
+	AccessKeyId     string     `json:"access_key_id"`
+	AccessKeySecret string     `json:"access_key_secret"`
+	RegionId        string     `json:"region_id"`
+	Instances       []Instance `json:"instances"`
+	DingTalk        struct {
+		Webhook string `json:"webhook"`
+		Secret  string `json:"secret"`
+	} `json:"ding_talk"`
+}
+
+type Config struct {
+	Tasks []Task `json:"tasks"`
+}
+
+func (c Config) Validate() error {
+	for _, task := range c.Tasks {
+		for _, instance := range task.Instances {
+			if !(instance.InstanceType == query.Rds || instance.InstanceType == query.PolarDB) {
+				return errors.New(fmt.Sprintf("instance_type only support [%s] and [%s] for now", query.Rds, query.PolarDB))
+			}
+		}
+	}
+	return nil
+}
+
+func parseConfig() (Config, error) {
+	config := flag.String("config", "config.json", "config file path")
 	flag.Parse()
 
-	if *accessKeyId == "" {
-		log.Fatalln("access.key.id is required")
+	var c Config
+	d, err := os.ReadFile(*config)
+	if err != nil {
+		return c, errors.New("read config file error: " + err.Error())
 	}
-
-	if *accessKeySecret == "" {
-		log.Fatalln("access.key.secret is required")
+	if err := json.Unmarshal(d, &c); err != nil {
+		return c, errors.New("parse config file error: " + err.Error())
 	}
+	return c, nil
+}
 
-	if *regionId == "" {
-		log.Fatalln("region.id is required")
+func main() {
+	config, err := parseConfig()
+	if err != nil {
+		log.Fatalln(err)
 	}
-
-	if *url == "" {
-		log.Fatalln("robot.url is required")
+	if err := config.Validate(); err != nil {
+		log.Fatalln(err)
 	}
-
-	if *instanceIds == "" {
-		log.Fatalln("instance.ids is required")
-	}
-
-	ids := strings.Split(*instanceIds, ",")
-	client := rdsquery.NewClient(*regionId, *accessKeyId, *accessKeySecret)
-	exclude := make(map[string]bool)
-	for _, v := range strings.Split(*excludeDb, ",") {
-		exclude[v] = true
-	}
-
-	message := make(chan string, 20)
-	go send.DoSend(*url, *secret, message)
-
-	for {
-		for _, id := range ids {
-			go func(instanceId string) {
-				err := send.NewMessage(instanceId, client, exclude, message)
-				if err != nil {
-					log.Println(err)
+	for _, task := range config.Tasks {
+		ch := make(chan string)
+		go send.DoSend(dingtalk.NewDingTalk(task.DingTalk.Webhook, task.DingTalk.Secret), ch)
+		for _, instance := range task.Instances {
+			go func(t Task, i Instance) {
+				client := query.NewClient(i.InstanceType)
+				if err := client.NewClient(t.RegionId, t.AccessKeyId, t.AccessKeySecret); err != nil {
+					log.Println(fmt.Sprintf("[%s] init client error", t.AccessKeyId), err)
+					return
 				}
-			}(id)
+				instanceName := client.InstanceName(i.InstanceId)
+				exclude := i.Exclude()
+
+				for {
+					if records, err := client.SlowSql(i.InstanceId); err != nil {
+						log.Println(fmt.Sprintf("query [%s] slow sql records error", instanceName), err)
+					} else {
+						records.NewMessage(instanceName, string(i.InstanceType), exclude, ch)
+					}
+					time.Sleep(5 * time.Minute)
+				}
+			}(task, instance)
 		}
-		time.Sleep(5 * time.Minute)
 	}
+	infinite := make(chan struct{})
+	<-infinite
 }
